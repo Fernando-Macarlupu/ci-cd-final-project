@@ -1,0 +1,44 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: flake8-fixed
+  labels:
+    app.kubernetes.io/version: "0.1"
+spec:
+  description: >-
+    Modified flake8 task that upgrades pip before installing requirements,
+    avoiding a known TOML parser bug in pip <= 21.x.
+  params:
+    - default: docker.io/alpine/flake8@sha256:bb280bf2af4a434be912f25bbcb6c79ea4d735ed3c8e259f96c405998920871f
+      description: The container image with flake8
+      name: image
+      type: string
+    - default: "."
+      description: The path to the module which should be analysed by flake8
+      name: path
+      type: string
+    - default: requirements.txt
+      description: The name of the requirements file inside the source location
+      name: requirements_file
+      type: string
+    - default: []
+      description: The arguments to pass to the flake8 CLI.
+      name: args
+      type: array
+  steps:
+    - args:
+        - $(params.args)
+      computeResources: {}
+      image: $(params.image)
+      name: flake8
+      script: |
+        export HOME=/tmp/python
+        export PATH=$PATH:/tmp/python/.local/bin
+        python -mpip install --upgrade --user "pip>=23.0"
+        if [ -n "$(params.requirements_file)" ] && [ -e "$(params.requirements_file)" ];then
+            python -mpip install --user -r $(params.requirements_file)
+        fi
+        flake8 $@ $(params.path)
+      workingDir: $(workspaces.source.path)
+  workspaces:
+    - name: source
